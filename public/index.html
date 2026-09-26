@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Casino Clash</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main id="app">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">LIVE MULTIPLAYER</div>
+        <h1>CASINO <span>CLASH</span></h1>
+      </div>
+      <div id="timer" class="timer">03:00</div>
+    </header>
+
+    <section id="lobby" class="panel lobby">
+      <h2>Enter the Clash</h2>
+      <p class="muted">Both players begin with <strong>1,000 credits</strong>. You have 3 minutes to finish with more than your opponent.</p>
+      <label>Your name<input id="name" maxlength="16" placeholder="Player name" /></label>
+      <div class="lobby-actions">
+        <button id="create">Create Room</button>
+        <div class="or">OR</div>
+        <input id="roomCode" maxlength="5" placeholder="ROOM CODE" />
+        <button id="join" class="secondary">Join Room</button>
+      </div>
+      <div id="lobbyMsg" class="message"></div>
+    </section>
+
+    <section id="roomPanel" class="panel hidden">
+      <div class="room-head">
+        <div><span class="muted">ROOM</span> <strong id="roomCodeDisplay">-----</strong></div>
+        <div id="roomStatus">Waiting for opponent…</div>
+      </div>
+      <div id="players" class="players"></div>
+      <button id="start" class="start hidden">START CLASH</button>
+    </section>
+
+    <section id="game" class="hidden">
+      <div class="scoreboard" id="scoreboard"></div>
+
+      <nav class="tabs" aria-label="Games">
+        <button class="tab active" data-game="blackjack">♠ Blackjack</button>
+        <button class="tab" data-game="slots">🎰 Slots</button>
+        <button class="tab" data-game="roulette">🎡 Roulette</button>
+      </nav>
+
+      <div id="gameArea"></div>
+      <div id="gameMsg" class="message"></div>
+    </section>
+
+    <section id="rules" class="panel rules">
+      <h3>How to Win</h3>
+      <ol>
+        <li>Each player starts with exactly <strong>1,000 credits</strong>.</li>
+        <li>The match lasts exactly <strong>3 minutes</strong>.</li>
+        <li>Use your credits in Blackjack, Slots, and Roulette.</li>
+        <li>Bets are deducted before a game resolves; winning payouts are added automatically.</li>
+        <li>When the clock reaches zero, the player with the higher balance wins.</li>
+      </ol>
+      <p class="muted small">Credits have no cash value. This is a skill-and-luck game using fictional currency.</p>
+    </section>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/game.js"></script>
+</body>
+</html>
