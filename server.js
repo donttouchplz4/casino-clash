@@ -126,6 +126,7 @@ io.on("connection", socket => {
       balance: STARTING_BALANCE,
       connected: true,
       blackjack: null,
+      mines: null,
       lastAction: 0
     });
     rooms.set(code, room);
@@ -149,6 +150,7 @@ io.on("connection", socket => {
       balance: STARTING_BALANCE,
       connected: true,
       blackjack: null,
+      mines: null,
       lastAction: 0
     });
     socket.join(room.code);
@@ -201,37 +203,74 @@ io.on("connection", socket => {
     cb?.({ ok: true, reels, multiplier, net: amount * (multiplier - 1), balance: player.balance });
   });
 
-  socket.on("game:roulette", ({ bet, pick } = {}, cb) => {
+  socket.on("game:mines:start", ({ bet } = {}, cb) => {
     const active = requireActiveGame(socket, cb);
     if (!active) return;
     const { room, player } = active;
+    if (player.mines) return cb?.({ ok: false, error: "Finish your current Mines game first." });
     const amount = Number(bet);
-    const choice = String(pick);
     if (!Number.isFinite(amount) || amount < 1 || amount > player.balance) return cb?.({ ok: false, error: "Invalid bet." });
 
-    const number = Math.floor(Math.random() * 37);
-    const red = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(number);
-    let won = false;
-    let multiplier = 0;
-
-    if (choice === "red" || choice === "black") {
-      won = number !== 0 && ((choice === "red") === red);
-      multiplier = 2;
-    } else if (choice === "odd" || choice === "even") {
-      won = number !== 0 && ((choice === "odd") === (number % 2 === 1));
-      multiplier = 2;
-    } else if (/^number:\d+$/.test(choice)) {
-      const n = Number(choice.split(":")[1]);
-      won = n === number;
-      multiplier = 36;
-    }
-
+    const mineCells = new Set();
+    while (mineCells.size < 3) mineCells.add(Math.floor(Math.random() * 25));
     player.balance -= amount;
-    if (won) player.balance += amount * multiplier;
+    player.mines = { bet: amount, mineCells: [...mineCells], safeCells: [] };
     broadcastBalances(room);
-    cb?.({ ok: true, number, red, won, multiplier, net: won ? amount * (multiplier - 1) : -amount, balance: player.balance });
+    cb?.({ ok: true, bet: amount, mineCount: 3, safeCells: [], balance: player.balance });
   });
 
+  socket.on("game:mines:reveal", ({ cell } = {}, cb) => {
+    const active = requireActiveGame(socket, cb);
+    if (!active) return;
+    const { room, player } = active;
+    const game = player.mines;
+    if (!game) return cb?.({ ok: false, error: "Start a Mines game first." });
+    const index = Number(cell);
+    if (!Number.isInteger(index) || index < 0 || index >= 25 || game.safeCells.includes(index)) {
+      return cb?.({ ok: false, error: "Choose an unrevealed tile." });
+    }
+
+    if (game.mineCells.includes(index)) {
+      const result = { ok: true, outcome: "mine", cell: index, mines: game.mineCells, safeCells: game.safeCells, balance: player.balance };
+      player.mines = null;
+      broadcastBalances(room);
+      return cb?.(result);
+    }
+
+    game.safeCells.push(index);
+    const safeCount = game.safeCells.length;
+    let multiplier = 0.96;
+    for (let i = 0; i < safeCount; i++) multiplier *= (25 - i) / (22 - i);
+    const potentialPayout = Math.round(game.bet * multiplier * 100) / 100;
+
+    if (safeCount === 22) {
+      player.balance += potentialPayout;
+      const result = { ok: true, outcome: "cleared", cell: index, mines: game.mineCells, safeCells: game.safeCells, multiplier, payout: potentialPayout, balance: player.balance };
+      player.mines = null;
+      broadcastBalances(room);
+      return cb?.(result);
+    }
+
+    cb?.({ ok: true, outcome: "safe", cell: index, safeCells: game.safeCells, safeCount, multiplier, potentialPayout, balance: player.balance });
+  });
+
+  socket.on("game:mines:cashout", cb => {
+    const active = requireActiveGame(socket, cb);
+    if (!active) return;
+    const { room, player } = active;
+    const game = player.mines;
+    if (!game) return cb?.({ ok: false, error: "Start a Mines game first." });
+    if (game.safeCells.length < 1) return cb?.({ ok: false, error: "Reveal at least one safe tile before cashing out." });
+
+    let multiplier = 0.96;
+    for (let i = 0; i < game.safeCells.length; i++) multiplier *= (25 - i) / (22 - i);
+    const payout = Math.round(game.bet * multiplier * 100) / 100;
+    player.balance += payout;
+    const result = { ok: true, outcome: "cashout", mines: game.mineCells, safeCells: game.safeCells, multiplier, payout, net: Math.round((payout - game.bet) * 100) / 100, balance: player.balance };
+    player.mines = null;
+    broadcastBalances(room);
+    cb?.(result);
+  });
   socket.on("game:blackjack:start", ({ bet } = {}, cb) => {
     const active = requireActiveGame(socket, cb);
     if (!active) return;
