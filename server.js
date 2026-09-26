@@ -193,7 +193,7 @@ io.on("connection", socket => {
     if (reels[0] === reels[1] && reels[1] === reels[2]) {
       multiplier = reels[0] === "7️⃣" ? 10 : 5;
     } else if (reels[0] === reels[1] || reels[1] === reels[2] || reels[0] === reels[2]) {
-      multiplier = 2;
+      multiplier = 1.5;
     }
     player.balance -= amount;
     player.balance += amount * multiplier;
