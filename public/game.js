@@ -66,14 +66,21 @@ socket.on("match:start", data => {
   renderGame();
 });
 
-socket.on("match:end", players => {
+socket.on("match:end", data => {
   $("timer").textContent = "00:00";
+  const players = Array.isArray(data) ? data : data?.players;
+  if (!players?.length) {
+    msg(gameMsg, "The match ended, but final results are unavailable.");
+    return;
+  }
+
   const sorted = [...players].sort((a,b)=>b.balance-a.balance);
-  const winner = sorted[0];
+  const tied = sorted.length > 1 && Number(sorted[0].balance) === Number(sorted[1].balance);
+  const headline = tied ? "It's a tie!" : `${escapeHtml(sorted[0].name)} wins!`;
   $("gameArea").innerHTML = `<div class="game-card" style="text-align:center">
     <div class="eyebrow">FINAL RESULTS</div>
-    <h2>${escapeHtml(winner.name)} wins!</h2>
-    <p class="muted">Final balance: <strong>${money(winner.balance)}</strong></p>
+    <h2>${headline}</h2>
+    <p class="muted">${tied ? "Top final balance:" : "Winner's final balance:"} <strong>${money(sorted[0].balance)}</strong></p>
     <div class="players">${sorted.map(p=>`<div class="player-card"><div class="player-name">${escapeHtml(p.name)}</div><div class="balance">${money(p.balance)}</div></div>`).join("")}</div>
   </div>`;
 });
