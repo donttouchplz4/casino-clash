@@ -1,5 +1,5 @@
 const socket = io();
-let state = { room: null, myId: null, activeGame: "blackjack", bj: null };
+let state = { room: null, myId: null, activeGame: "blackjack", bj: null, mines: null };
 
 const $ = id => document.getElementById(id);
 const lobby = $("lobby"), roomPanel = $("roomPanel"), game = $("game");
@@ -62,6 +62,7 @@ socket.on("match:start", data => {
   roomPanel.classList.remove("hidden");
   game.classList.remove("hidden");
   state.bj = null;
+  state.mines = null;
   $("gameArea").innerHTML = "";
   renderGame();
 });
@@ -116,7 +117,7 @@ function renderGame() {
   const area = $("gameArea");
   if (!state.room?.started) return;
   if (state.activeGame === "slots") area.innerHTML = slotsHTML();
-  else if (state.activeGame === "roulette") area.innerHTML = rouletteHTML();
+  else if (state.activeGame === "mines") area.innerHTML = minesHTML();
   else area.innerHTML = blackjackHTML();
   bindGame();
 }
@@ -155,16 +156,36 @@ function slotsHTML() {
   </div>`;
 }
 
-function rouletteHTML() {
-  const nums = Array.from({length:37},(_,i)=>i);
+function minesHTML() {
+  if (!state.mines) return `<div class="game-card">
+    <h2>Mines</h2><p class="muted">A 5×5 board hides 3 mines. Reveal safe tiles to grow your cash-out. Hit a mine and lose your bet.</p>
+    <div class="bet-row">${betInput()}<button id="minesStart">Start game</button></div>
+  </div>`;
+
+  const game = state.mines;
+  const safeCells = new Set(game.safeCells || []);
+  const mines = new Set(game.mines || []);
+  const tiles = Array.from({length:25},(_,i)=>{
+    const safe = safeCells.has(i);
+    const mine = mines.has(i);
+    const exploded = game.exploded === i;
+    const revealed = safe || (game.over && mine);
+    const label = exploded ? "💥" : safe ? "💎" : (game.over && mine) ? "💣" : "?";
+    const klass = exploded ? "mine-tile exploded" : safe ? "mine-tile safe" : revealed ? "mine-tile mine" : "mine-tile";
+    return `<button class="${klass}" data-mines-cell="${i}" ${revealed || game.over ? "disabled" : ""} aria-label="${revealed ? label : `Tile ${i+1}`}">${label}</button>`;
+  }).join("");
+  const canCashout = !game.over && (game.safeCells || []).length > 0;
   return `<div class="game-card">
-    <h2>Roulette</h2><p class="muted">Red/black and odd/even pay 2×. A straight-up number pays 36×.</p>
-    <div class="bet-row">${betInput()}<button id="rRed">Red</button><button id="rBlack">Black</button><button id="rOdd" class="secondary">Odd</button><button id="rEven" class="secondary">Even</button></div>
-    <div class="roulette-grid">${nums.map(n=>`<button data-number="${n}">${n}</button>`).join("")}</div>
-    <div id="rouletteResult" class="big-number">?</div>
+    <h2>Mines</h2>
+    <p class="muted">Bet: <strong>${money(game.bet)}</strong> · Safe tiles: <strong>${(game.safeCells || []).length}</strong> · 3 mines</p>
+    ${!game.over ? `<p class="mine-payout">Cash-out now: <strong>${money(game.potentialPayout || 0)}</strong> (${Number(game.multiplier || 0).toFixed(2)}×)</p>` : ""}
+    <div class="mine-grid">${tiles}</div>
+    <div class="action-row mine-actions">
+      ${canCashout ? `<button id="minesCashout">Cash out ${money(game.potentialPayout)}</button>` : ""}
+      ${game.over ? `<button id="minesAgain">Play again</button>` : ""}
+    </div>
   </div>`;
 }
-
 function bindGame() {
   $("spin")?.addEventListener("click", () => {
     const bet = Number($("bet").value);
@@ -175,29 +196,46 @@ function bindGame() {
     });
   });
 
-  ["Red","Black","Odd","Even"].forEach(x=>{
-    const el = $("r"+x);
-    el?.addEventListener("click",()=>roulette(x.toLowerCase()));
+  $("minesStart")?.addEventListener("click",()=>{
+    socket.emit("game:mines:start",{bet:Number($("bet").value)},res=>{
+      if (!res.ok) return msg(gameMsg,res.error);
+      state.mines = {bet:res.bet,safeCells:[],mines:[],multiplier:0,potentialPayout:0,over:false};
+      renderGame();
+      msg(gameMsg,"Pick a tile. Cash out after any safe reveal.");
+    });
   });
-  document.querySelectorAll("[data-number]").forEach(el=>{
-    el.addEventListener("click",()=>roulette("number:"+el.dataset.number));
+  document.querySelectorAll("[data-mines-cell]").forEach(tile=>{
+    tile.addEventListener("click",()=>revealMine(Number(tile.dataset.minesCell)));
   });
-
+  $("minesCashout")?.addEventListener("click",()=>{
+    socket.emit("game:mines:cashout",res=>{
+      if (!res.ok) return msg(gameMsg,res.error);
+      state.mines = {...state.mines,...res,over:true,potentialPayout:res.payout};
+      renderGame();
+      msg(gameMsg,`Cashed out ${money(res.payout)} at ${res.multiplier.toFixed(2)}×. Net: ${res.net >= 0 ? "+" : ""}${money(res.net)}.`,res.net >= 0);
+    });
+  });
+  $("minesAgain")?.addEventListener("click",()=>{state.mines=null;renderGame();});
   $("bjStart")?.addEventListener("click",()=>bjStart());
   $("bjHit")?.addEventListener("click",()=>socket.emit("game:blackjack:hit",bjResponse));
   $("bjStand")?.addEventListener("click",()=>socket.emit("game:blackjack:stand",bjResponse));
   $("bjAgain")?.addEventListener("click",()=>{state.bj=null;renderGame();});
 }
 
-function roulette(pick) {
-  const bet = Number($("bet").value);
-  socket.emit("game:roulette",{bet,pick},res=>{
+function revealMine(cell) {
+  socket.emit("game:mines:reveal",{cell},res=>{
     if (!res.ok) return msg(gameMsg,res.error);
-    $("rouletteResult").textContent = `${res.number}${res.red ? " • RED" : res.number===0 ? " • GREEN" : " • BLACK"}`;
-    msg(gameMsg, res.won ? `WIN! ${res.multiplier}× payout. Net +${money(res.net)}.` : `Loss: -${money(bet)}.`, res.won);
+    if (res.outcome === "mine") {
+      state.mines = {...state.mines,...res,exploded:cell,over:true};
+      renderGame();
+      return msg(gameMsg,"Mine hit — your bet is lost.");
+    }
+    state.mines = {...state.mines,...res,safeCells:res.safeCells,potentialPayout:res.potentialPayout || res.payout || 0,over:res.outcome === "cleared"};
+    renderGame();
+    if (res.outcome === "cleared") msg(gameMsg,`Board cleared! You won ${money(res.payout)}.`,true);
+    else msg(gameMsg,`Safe tile! Cash-out is ${money(res.potentialPayout)} at ${res.multiplier.toFixed(2)}×.`,true);
   });
 }
-
 function bjStart() {
   socket.emit("game:blackjack:start",{bet:Number($("bet").value)},res=>{
     if (!res.ok) return msg(gameMsg,res.error);
