@@ -101,8 +101,10 @@ function broadcastBalances(room) {
 }
 
 function settleBlackjack(player, amount, result) {
-  if (result === "win") player.balance += amount;
-  else if (result === "blackjack") player.balance += amount * 1.5;
+  // The wager was deducted when the hand started. Add the returned stake
+  // plus the winnings for wins; a push only returns the original stake.
+  if (result === "win") player.balance += amount * 2;
+  else if (result === "blackjack") player.balance += amount * 2.5;
   else if (result === "push") player.balance += amount;
 }
 
