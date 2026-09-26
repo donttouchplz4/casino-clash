@@ -149,7 +149,7 @@ function cardHTML(c) {
 
 function slotsHTML() {
   return `<div class="game-card">
-    <h2>Slots</h2><p class="muted">Match two symbols for 2×. Match three for 5×. Three 7s pay 10×.</p>
+    <h2>Slots</h2><p class="muted">Match two symbols for 1.5×. Match three for 5×. Three 7s pay 10×.</p>
     <div id="slotResult" class="result">🎰 🎰 🎰</div>
     <div class="bet-row">${betInput()}<button id="spin">SPIN</button></div>
   </div>`;
