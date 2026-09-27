@@ -81,3 +81,5 @@ button.secondary:hover,.tab:hover{background:#2a2d38}
 .mine-payout strong{color:var(--gold2)}
 .mine-actions{justify-content:center;margin-top:16px}
 @media(max-width:650px){.mine-grid{gap:6px;width:min(100%,340px)}}
+.result.spinning{animation:slotSpin .14s ease-in-out infinite alternate;filter:blur(1px);text-shadow:0 0 18px #e6b84c88}
+@keyframes slotSpin{from{transform:translateY(-4px) scale(.99);opacity:.8}to{transform:translateY(4px) scale(1.02);opacity:1}}
