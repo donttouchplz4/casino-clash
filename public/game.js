@@ -188,11 +188,35 @@ function minesHTML() {
 }
 function bindGame() {
   $("spin")?.addEventListener("click", () => {
+    const spinButton = $("spin");
+    const slotResult = $("slotResult");
+    if (spinButton.disabled) return;
     const bet = Number($("bet").value);
+    const symbols = ["🍒", "🍋", "🔔", "⭐", "7️⃣"];
+    spinButton.disabled = true;
+    slotResult.classList.add("spinning");
+    msg(gameMsg,"Spinning...");
+    const spinTimer = setInterval(()=>{
+      if (!slotResult.isConnected) return clearInterval(spinTimer);
+      slotResult.textContent = Array.from({length:3},()=>symbols[Math.floor(Math.random()*symbols.length)]).join(" ");
+    },70);
+
     socket.emit("game:slots",{bet},res=>{
-      if (!res.ok) return msg(gameMsg,res.error);
-      $("slotResult").textContent = res.reels.join(" ");
-      msg(gameMsg, res.multiplier ? `You won ${res.multiplier}×. Net: ${res.net >= 0 ? "+" : ""}${money(res.net)}.` : `No match. Net: -${money(bet)}.`, res.multiplier>0);
+      if (!res.ok) {
+        clearInterval(spinTimer);
+        slotResult.classList.remove("spinning");
+        spinButton.disabled = false;
+        if (slotResult.isConnected) slotResult.textContent = "🎰 🎰 🎰";
+        return msg(gameMsg,res.error);
+      }
+      setTimeout(()=>{
+        clearInterval(spinTimer);
+        slotResult.classList.remove("spinning");
+        spinButton.disabled = false;
+        if (!slotResult.isConnected || state.activeGame !== "slots") return;
+        slotResult.textContent = res.reels.join(" ");
+        msg(gameMsg, res.multiplier ? `You won ${res.multiplier}×. Net: ${res.net >= 0 ? "+" : ""}${money(res.net)}.` : `No match. Net: -${money(bet)}.`, res.multiplier>0);
+      },850);
     });
   });
 
